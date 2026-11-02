@@ -4,7 +4,7 @@ An interactive handwritten digit recognition system powered by a Convolutional N
 
 ## Live Demo
 
-- **Link:** Coming Soon
+- **Link:** [Try the live app](https://digitrecognition-cnn.streamlit.app/)
 
 ## Overview
 
