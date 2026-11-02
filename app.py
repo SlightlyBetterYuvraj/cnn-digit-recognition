@@ -1,4 +1,7 @@
 import os
+# Suppress noisy TensorFlow startup logs
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
 import joblib
 import numpy as np
 import streamlit as st
@@ -11,6 +14,14 @@ st.set_page_config(
     page_icon="🔢",
     layout="wide"
 )
+
+# Fix for first-run custom component mount race condition (Issue #138)
+if "initialized" not in st.session_state:
+    st.session_state["initialized"] = True
+    st.rerun()
+
+if "canvas_key" not in st.session_state:
+    st.session_state["canvas_key"] = 0
 
 # Custom styling
 st.markdown("""
@@ -45,6 +56,9 @@ st.markdown("""
         font-size: 1.2rem;
         color: #9ca3af;
     }
+    div[data-testid="stCustomComponentV2"] {
+        min-height: 280px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,18 +79,23 @@ def load_trained_model():
         st.error(f"Error loading model: {e}")
         return None
 
-model = load_trained_model()
-
 col_canvas, col_prediction = st.columns([1, 1], gap="large")
 
 with col_canvas:
     st.subheader("🎨 Drawing Canvas")
     st.caption("Draw your digit in white on the black board.")
 
-    # Drawing tools control
-    stroke_width = st.slider("Brush Stroke Width", min_value=10, max_value=35, value=20, step=1)
+    col_tools1, col_tools2 = st.columns([2, 1])
+    with col_tools1:
+        stroke_width = st.slider("Brush Stroke Width", min_value=10, max_value=35, value=20, step=1)
+    with col_tools2:
+        st.write("")
+        st.write("")
+        if st.button("🗑️ Clear Canvas", use_container_width=True):
+            st.session_state["canvas_key"] += 1
+            st.rerun()
 
-    # Canvas component
+    # Canvas component with persistent key
     canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 0.0)",
         stroke_width=stroke_width,
@@ -85,12 +104,16 @@ with col_canvas:
         height=280,
         width=280,
         drawing_mode="freedraw",
-        key="canvas",
+        key=f"canvas_{st.session_state['canvas_key']}",
         return_image_data=True,
     )
 
 with col_prediction:
     st.subheader("🎯 Prediction & Analysis")
+
+    # Load model with non-blocking UI flow
+    with st.spinner("Loading CNN model..."):
+        model = load_trained_model()
 
     if canvas_result.image_data is not None and np.any(canvas_result.image_data[:, :, :3] > 0):
         # Extract RGB/Grayscale from canvas
